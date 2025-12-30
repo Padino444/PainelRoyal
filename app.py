@@ -243,12 +243,12 @@ else:
 
         with tab3:
              st.markdown("""
-             ### 🎯 Metas Royal
-             | Nivel | Vendas (Instaladas) | Bonus |
-             | :--- | :--- | :--- |
-             | 👶 Iniciante | 0 a 4 | - |
-             | 🥉 Bronze | **5** a 9 | R$ 50 |
-             | 🥈 Prata | **10** a 19 | R$ 150 |
-             | 🥇 Ouro | **20** a 39 | R$ 400 |
-             | 💎 Diamante | **40+** | R$ 1.000 |
+             ### ### 🎯 Metas Royal
+| Nivel | Vendas (Instaladas) | Bonus |
+| :--- | :--- | :--- |
+| 👶 Iniciante | 0 a 4 | - |
+| 🥉 Bronze | **5** a 9 | R$ 50 |
+| 🥈 Prata | **10** a 19 | R$ 100 |
+| 🥇 Ouro | **20** a 39 | R$ 200 |
+| 💎 Diamante | **40+** | R$ 400 |
              """)
