@@ -7,6 +7,9 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Sistema Royal", page_icon="👑", layout="wide")
 
+# --- VALOR DA COMISSÃO POR VENDA (Configure aqui) ---
+COMISSAO_POR_VENDA = 30  # R$ 30,00 por indicação instalada
+
 # --- LISTA DE PRODUTOS ---
 LISTA_ITENS = [
     "Internet 300 MEGA", "Internet 500 MEGA", "Internet 600 MEGA", "Internet 800 MEGA", "Internet 1 GIGA",
@@ -27,16 +30,14 @@ def get_connection():
 
 def carregar_dados(aba):
     conn = get_connection()
-    # ttl=0 garante que pegamos dados frescos do Google
     df = conn.read(worksheet=aba, ttl=0)
     
-    # 1. Limpa espaços nos nomes das colunas (cabeçalho)
+    # 1. Limpa espaços nos nomes das colunas
     df.columns = df.columns.str.strip()
     
     # 2. Tratamento para USUARIOS
     if aba == "usuarios":
         if "Usuario" in df.columns:
-            # Remove linhas totalmente vazias ou sujas
             df = df.dropna(subset=["Usuario"])
             df = df[df["Usuario"].astype(str).str.strip() != ""]
 
@@ -46,9 +47,7 @@ def carregar_dados(aba):
             df = df.dropna(subset=["Cliente"])
             df = df[df["Cliente"].astype(str).str.strip() != ""]
         
-        # Preenche vazios com texto em branco para não quebrar o painel
         df = df.fillna("")
-        # Garante que tudo seja texto na visualização
         df = df.astype(str)
             
     return df
@@ -62,30 +61,25 @@ def salvar_no_google(df, aba):
 def cadastrar_novo_usuario(usuario, senha, nome):
     df = carregar_dados("usuarios")
     
-    # Verifica duplicidade
     if not df.empty and str(usuario) in df['Usuario'].astype(str).values:
         return False, "Usuario ja existe."
     
-    # --- A CORREÇÃO MÁGICA (BLINDAGEM) ---
-    # Antes de adicionar o novo, vamos garantir que os ANTIGOS estejam certos.
-    # Essa função força tudo a virar True ou False (Booleano puro), sem texto misturado.
+    # Normaliza os status antigos para não perder checkbox
     def normalizar_status(valor):
         return str(valor).strip().upper() in ['TRUE', '1', '1.0', 'VERDADEIRO', 'SIM']
 
     if 'Aprovado' in df.columns:
         df['Aprovado'] = df['Aprovado'].apply(normalizar_status)
     
-    # Cria o novo usuário já como False (Booleano)
+    # Cria novo como False
     novo_dado = {
         "Usuario": str(usuario), 
         "Senha": str(senha), 
         "Nome": str(nome), 
-        "Aprovado": False  # Checkbox desmarcado
+        "Aprovado": False 
     }
     
     novo_usuario = pd.DataFrame([novo_dado])
-    
-    # Junta o antigo (já corrigido) com o novo
     df_final = pd.concat([df, novo_usuario], ignore_index=True)
     
     salvar_no_google(df_final, "usuarios")
@@ -110,7 +104,7 @@ def salvar_indicacao(afiliado, cliente, endereco, telefone, plano_final, obs):
 def calcular_nivel(qtd_vendas_validas):
     if qtd_vendas_validas >= 40: return "💎 Diamante", 400, 100
     elif qtd_vendas_validas >= 20: return "🥇 Ouro", 200, 40
-    elif qtd_vendas_validas >= 10: return "🥈 Prata", 150, 20
+    elif qtd_vendas_validas >= 10: return "🥈 Prata", 100, 20
     elif qtd_vendas_validas >= 5: return "🥉 Bronze", 50, 10
     else: return "👶 Iniciante", 0, 5
 
@@ -145,8 +139,6 @@ if not st.session_state['logado']:
                     
                     if not user_match.empty:
                         valor_aprovado = user_match.iloc[0]['Aprovado']
-                        
-                        # Padroniza para verificar o login
                         status_str = str(valor_aprovado).strip().upper()
                         
                         if status_str in ['TRUE', '1', '1.0', 'VERDADEIRO', 'SIM']:
@@ -200,7 +192,6 @@ else:
         
         with tab_vendas:
             st.warning("Dados carregados da Planilha Google.")
-            # Limpeza visual para evitar erro NaN
             df_vendas = df_vendas.fillna("") 
 
             df_editado = st.data_editor(
@@ -221,11 +212,8 @@ else:
 
         with tab_users:
             df_users = carregar_dados("usuarios")
-            
-            # --- CORREÇÃO VISUAL ADMIN ---
             df_users = df_users.fillna("")
             
-            # Garante que a coluna seja Booleana para o Editor funcionar
             def limpar_booleano(valor):
                 return str(valor).strip().upper() in ['TRUE', '1', '1.0', 'VERDADEIRO', 'SIM']
             
@@ -247,7 +235,7 @@ else:
                 st.success("Permissoes salvas no Google!")
                 st.cache_data.clear()
 
-    # --- AFILIADO ---
+    # --- AFILIADO (DASHBOARD FINANCEIRO AQUI) ---
     else:
         st.title("🚀 Painel do Embaixador")
         if df_vendas.empty:
@@ -258,9 +246,14 @@ else:
             vendas_validas = meus_dados[meus_dados['Status'] == 'Instalado']
             qtd_validas = len(vendas_validas)
             
-        nivel, bonus, prox_meta = calcular_nivel(qtd_validas)
+        nivel, bonus_meta, prox_meta = calcular_nivel(qtd_validas)
+        
+        # --- CÁLCULO FINANCEIRO ---
+        ganhos_vendas = qtd_validas * COMISSAO_POR_VENDA
+        total_geral = ganhos_vendas + bonus_meta
+        # --------------------------
 
-        tab1, tab2, tab3 = st.tabs(["📝 Indicar", "📊 Progresso", "🏆 Metas"])
+        tab1, tab2, tab3 = st.tabs(["📝 Indicar", "💰 Meus Ganhos", "🏆 Metas"])
         
         with tab1:
             st.write("### Novo Contrato")
@@ -291,21 +284,35 @@ else:
                     st.error("Preencha tudo!")
 
         with tab2:
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Instaladas", f"{qtd_validas}")
-            col2.metric("Nivel", nivel)
-            col3.metric("Bonus", f"R$ {bonus}")
+            # --- PAINEL FINANCEIRO DESTAQUE ---
+            st.markdown(f"""
+            <div style="background-color: #d4edda; padding: 20px; border-radius: 10px; border-left: 5px solid #28a745;">
+                <h2 style="color: #155724; margin:0;">💰 Saldo Total: R$ {total_geral},00</h2>
+                <p style="margin:0;">Soma de Comissões + Bônus de Meta</p>
+            </div>
+            <br>
+            """, unsafe_allow_html=True)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Vendas Instaladas", qtd_validas)
+            col2.metric("Comissão (Vendas)", f"R$ {ganhos_vendas},00")
+            col3.metric("Bônus (Meta)", f"R$ {bonus_meta},00")
+            col4.metric("Nível Atual", nivel)
+            
             if prox_meta > 0:
                 progresso = min(qtd_validas / prox_meta, 1.0)
-                st.write(f"Proxima meta: **{qtd_validas}/{prox_meta}**")
+                st.write(f"Faltam **{prox_meta - qtd_validas}** vendas para o próximo nível!")
                 st.progress(progresso)
             st.divider()
+            st.write("### 📄 Histórico de Indicações")
             st.dataframe(meus_dados, use_container_width=True)
 
         with tab3:
              st.markdown("""
-             ### ### 🎯 Metas Royal
-| Nivel | Vendas (Instaladas) | Bonus |
+             ### 🎯 Tabela de Metas Royal
+             Além dos **R$ 30,00 por venda**, você ganha bônus extra ao atingir as metas:
+             
+| Nivel | Vendas (Instaladas) | Bonus Extra |
 | :--- | :--- | :--- |
 | 👶 Iniciante | 0 a 4 | - |
 | 🥉 Bronze | **5** a 9 | R$ 50 |
