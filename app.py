@@ -46,13 +46,24 @@ def salvar_no_google(df, aba):
 # --- FUNÇÕES DO SISTEMA ---
 def cadastrar_novo_usuario(usuario, senha, nome):
     df = carregar_dados("usuarios")
-    # Converte para string para evitar erro
-    if not df.empty and usuario in df['Usuario'].astype(str).values:
+    
+    # Verifica se já existe (convertendo pra string pra não dar erro)
+    if not df.empty and str(usuario) in df['Usuario'].astype(str).values:
         return False, "Usuario ja existe."
     
-    novo_usuario = pd.DataFrame([{"Usuario": usuario, "Senha": senha, "Nome": nome, "Aprovado": False}])
-    df = pd.concat([df, novo_usuario], ignore_index=True)
-    salvar_no_google(df, "usuarios")
+    # Cria o novo dado forçando ser texto
+    novo_dado = {
+        "Usuario": str(usuario), 
+        "Senha": str(senha), 
+        "Nome": str(nome), 
+        "Aprovado": "FALSE" # Vamos mandar como texto por garantia, ou boolean False
+    }
+    
+    novo_usuario = pd.DataFrame([novo_dado])
+    
+    # Junta e Salva
+    df_final = pd.concat([df, novo_usuario], ignore_index=True)
+    salvar_no_google(df_final, "usuarios")
     return True, "Cadastro realizado! Aguarde a aprovacao do Admin."
 
 def salvar_indicacao(afiliado, cliente, endereco, telefone, plano_final, obs):
