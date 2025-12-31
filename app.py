@@ -66,26 +66,18 @@ def cadastrar_novo_usuario(usuario, senha, nome):
     if not df.empty and str(usuario) in df['Usuario'].astype(str).values:
         return False, "Usuario ja existe."
     
-    # --- A CORREÇÃO ESTÁ AQUI ---
-    # 1. Usamos False (sem aspas, cor azul/laranja no código)
     novo_dado = {
         "Usuario": str(usuario), 
         "Senha": str(senha), 
         "Nome": str(nome), 
-        "Aprovado": False # Booleano puro!
+        # AQUI: Mandamos o texto "FALSE" puro. 
+        # O Google Sheets costuma reconhecer isso e manter o checkbox desmarcado.
+        "Aprovado": "FALSE" 
     }
     
     novo_usuario = pd.DataFrame([novo_dado])
     df_final = pd.concat([df, novo_usuario], ignore_index=True)
-
-    # 2. TRUQUE DE MESTRE:
-    # Antes de salvar, convertemos a coluna inteira para Booleano real
-    # Isso impede que fique misturado texto "TRUE" com valor True
-    def corrigir_booleano(valor):
-        return str(valor).lower() == 'true'
-
-    df_final['Aprovado'] = df_final['Aprovado'].apply(corrigir_booleano)
-
+    
     salvar_no_google(df_final, "usuarios")
     return True, "Cadastro realizado! Aguarde a aprovacao do Admin."
 
