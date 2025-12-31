@@ -26,25 +26,30 @@ def get_connection():
 
 def carregar_dados(aba):
     conn = get_connection()
-    # ttl=0 garante dados frescos
+    # ttl=0 para pegar dados frescos
     df = conn.read(worksheet=aba, ttl=0)
     
-    # --- FAXINA AUTOMÁTICA NOS CABEÇALHOS ---
-    # Isso remove espaços vazios antes ou depois do nome (ex: "Usuario " vira "Usuario")
+    # 1. Limpeza de espaços nos cabeçalhos (Evita erro de 'Usuario ' com espaço)
     df.columns = df.columns.str.strip()
     
-    # --- LIMPEZA DE LINHAS VAZIAS ---
+    # 2. Limpeza específica para USUARIOS
     if aba == "usuarios":
-        # Se a planilha estiver vazia ou com cabeçalho errado, avisa a gente antes de quebrar
-        if "Usuario" not in df.columns:
-            st.error(f"⚠️ ATENÇÃO: Não achei a coluna 'Usuario'. As colunas que achei foram: {df.columns.tolist()}")
-            st.stop() # Para o código aqui pra você ler a mensagem acima
-            
-        # Agora sim, filtra (removendo linhas onde Usuario está vazio)
-        df = df.dropna(subset=["Usuario"])
-        # Remove se for só espaço vazio
-        df = df[df["Usuario"].astype(str).str.strip() != ""]
+        if "Usuario" in df.columns:
+            df = df.dropna(subset=["Usuario"])
+            df = df[df["Usuario"].astype(str).str.strip() != ""]
+
+    # 3. Limpeza específica para VENDAS (AQUI ESTÁ A CORREÇÃO DO ERRO NOVO)
+    if aba == "vendas":
+        # Remove linhas onde o cliente está vazio (linha fantasma)
+        if "Cliente" in df.columns:
+            df = df.dropna(subset=["Cliente"])
+            # Remove se for só espaço vazio
+            df = df[df["Cliente"].astype(str).str.strip() != ""]
         
+        # ⚠️ O PULO DO GATO: Preenche qualquer buraco vazio com texto em branco
+        # Isso elimina os 'NaN' que estão quebrando o seu painel
+        df = df.fillna("") 
+            
     return df
 
 def salvar_no_google(df, aba):
