@@ -26,16 +26,17 @@ def get_connection():
 
 def carregar_dados(aba):
     conn = get_connection()
-    try:
-        # Lê os dados da aba específica (vendas ou usuarios)
-        df = conn.read(worksheet=aba)
-        return df
-    except:
-        # Se der erro (ex: planilha vazia), retorna DataFrame vazio
-        if aba == "usuarios":
-            return pd.DataFrame(columns=["Usuario", "Senha", "Nome", "Aprovado"])
-        else:
-            return pd.DataFrame(columns=["Data", "Afiliado", "Cliente", "Endereco", "Telefone", "Plano", "Status", "Obs"])
+    # ttl=0 garante que pega os dados frescos
+    df = conn.read(worksheet=aba, ttl=0)
+    
+    # --- A MÁGICA DA LIMPEZA AQUI ---
+    # Se a aba for de usuarios, remove linhas onde o 'Usuario' está vazio
+    if aba == "usuarios" and not df.empty:
+        df = df.dropna(subset=["Usuario"])
+        # Garante que não tem espaços vazios sujando
+        df = df[df["Usuario"].astype(str).str.strip() != ""]
+        
+    return df
 
 def salvar_no_google(df, aba):
     conn = get_connection()
