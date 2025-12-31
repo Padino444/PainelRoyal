@@ -26,29 +26,30 @@ def get_connection():
 
 def carregar_dados(aba):
     conn = get_connection()
-    # ttl=0 para pegar dados frescos
+    # ttl=0 é essencial para não pegar cache velho
     df = conn.read(worksheet=aba, ttl=0)
     
-    # 1. Limpeza de espaços nos cabeçalhos (Evita erro de 'Usuario ' com espaço)
+    # 1. Limpa espaços nos nomes das colunas (cabeçalho)
     df.columns = df.columns.str.strip()
     
-    # 2. Limpeza específica para USUARIOS
+    # 2. Tratamento para USUARIOS
     if aba == "usuarios":
         if "Usuario" in df.columns:
             df = df.dropna(subset=["Usuario"])
             df = df[df["Usuario"].astype(str).str.strip() != ""]
 
-    # 3. Limpeza específica para VENDAS (AQUI ESTÁ A CORREÇÃO DO ERRO NOVO)
+    # 3. Tratamento para VENDAS (AQUI ESTÁ A SOLUÇÃO DO SEU ERRO)
     if aba == "vendas":
-        # Remove linhas onde o cliente está vazio (linha fantasma)
+        # Se tiver coluna Cliente, remove as linhas onde Cliente está vazio
         if "Cliente" in df.columns:
             df = df.dropna(subset=["Cliente"])
-            # Remove se for só espaço vazio
             df = df[df["Cliente"].astype(str).str.strip() != ""]
         
-        # ⚠️ O PULO DO GATO: Preenche qualquer buraco vazio com texto em branco
-        # Isso elimina os 'NaN' que estão quebrando o seu painel
-        df = df.fillna("") 
+        # O SEGREDO: Preenche buracos vazios (NaN) com texto vazio ("")
+        df = df.fillna("")
+        
+        # SEGURANÇA EXTRA: Converte tudo para texto para o JSON não reclamar de números quebrados
+        df = df.astype(str)
             
     return df
 
