@@ -112,34 +112,25 @@ if 'logado' not in st.session_state:
 # ==========================================
 # TELA DE LOGIN / CADASTRO
 # ==========================================
-if not st.session_state['logado']:
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        st.markdown("<h1 style='text-align: center; color: #1E90FF;'>👑 Royal Acesso</h1>", unsafe_allow_html=True)
-        tab_login, tab_cadastro = st.tabs(["🔑 Entrar", "📝 Solicitar Acesso"])
-        
-        with tab_login:
-            login_user = st.text_input("Usuario", key="login_u")
-            login_pass = st.text_input("Senha", type="password", key="login_p")
-            if st.button("ENTRAR", use_container_width=True):
-                df_users = carregar_dados("usuarios")
-                
-                if df_users.empty:
-                    st.error("Nenhum usuario cadastrado. Crie o Admin na planilha primeiro ou cadastre-se.")
-                else:
-                    df_users['Usuario'] = df_users['Usuario'].astype(str)
-                    df_users['Senha'] = df_users['Senha'].astype(str)
-                    user_match = df_users[(df_users['Usuario'] == login_user) & (df_users['Senha'] == login_pass)]
-                    
-                    if not user_match.empty:
-                        esta_aprovado = user_match.iloc[0]['Aprovado']
-                        if str(esta_aprovado).lower() == 'true':
+if not user_match.empty:
+                        valor_aprovado = user_match.iloc[0]['Aprovado']
+                        
+                        # --- 🕵️‍♀️ O DETETIVE DE TIPOS ---
+                        # Vamos ver o que está vindo da planilha para ter certeza
+                        # st.write(f"DEBUG: O valor na planilha é: {valor_aprovado} (Tipo: {type(valor_aprovado)})") 
+                        
+                        # Converte para texto maiúsculo para padronizar
+                        status_str = str(valor_aprovado).strip().upper()
+                        
+                        # --- A CHAVE MESTRA ---
+                        # Aceita: "TRUE", "True", "true", Booleano True, Número 1, "VERDADEIRO"
+                        if status_str in ['TRUE', '1', '1.0', 'VERDADEIRO', 'SIM']:
                             st.session_state['logado'] = True
                             st.session_state['usuario'] = login_user
                             st.session_state['nome'] = user_match.iloc[0]['Nome']
                             st.rerun()
                         else:
-                            st.warning("🔒 Seu cadastro ainda esta em analise.")
+                            st.warning(f"🔒 Seu cadastro ainda esta em analise. (Status lido: {valor_aprovado})")
                     else:
                         st.error("Usuario ou senha incorretos.")
 
