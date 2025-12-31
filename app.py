@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import time
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
@@ -38,7 +39,7 @@ def carregar_dados(aba):
             df = df.dropna(subset=["Usuario"])
             df = df[df["Usuario"].astype(str).str.strip() != ""]
 
-    # 3. Tratamento para VENDAS (AQUI ESTÁ A SOLUÇÃO DO SEU ERRO)
+    # 3. Tratamento para VENDAS (Evita erro de JSON/NaN)
     if aba == "vendas":
         # Se tiver coluna Cliente, remove as linhas onde Cliente está vazio
         if "Cliente" in df.columns:
@@ -48,14 +49,13 @@ def carregar_dados(aba):
         # O SEGREDO: Preenche buracos vazios (NaN) com texto vazio ("")
         df = df.fillna("")
         
-        # SEGURANÇA EXTRA: Converte tudo para texto para o JSON não reclamar de números quebrados
+        # SEGURANÇA EXTRA: Converte tudo para texto
         df = df.astype(str)
             
     return df
 
 def salvar_no_google(df, aba):
     conn = get_connection()
-    # Atualiza a aba inteira com o novo DataFrame
     conn.update(worksheet=aba, data=df)
 
 # --- FUNÇÕES DO SISTEMA ---
@@ -70,8 +70,7 @@ def cadastrar_novo_usuario(usuario, senha, nome):
         "Usuario": str(usuario), 
         "Senha": str(senha), 
         "Nome": str(nome), 
-        # AQUI: Mandamos o texto "FALSE" puro. 
-        # O Google Sheets costuma reconhecer isso e manter o checkbox desmarcado.
+        # Envia como texto para o Google Sheets virar Checkbox desmarcado
         "Aprovado": "FALSE" 
     }
     
@@ -98,9 +97,9 @@ def salvar_indicacao(afiliado, cliente, endereco, telefone, plano_final, obs):
     return True
 
 def calcular_nivel(qtd_vendas_validas):
-    if qtd_vendas_validas >= 40: return "💎 Diamante", 1000, 100
-    elif qtd_vendas_validas >= 20: return "🥇 Ouro", 400, 40
-    elif qtd_vendas_validas >= 10: return "🥈 Prata", 150, 20
+    if qtd_vendas_validas >= 40: return "💎 Diamante", 400, 100
+    elif qtd_vendas_validas >= 20: return "🥇 Ouro", 200, 40
+    elif qtd_vendas_validas >= 10: return "🥈 Prata", 100, 20
     elif qtd_vendas_validas >= 5: return "🥉 Bronze", 50, 10
     else: return "👶 Iniciante", 0, 5
 
@@ -112,25 +111,42 @@ if 'logado' not in st.session_state:
 # ==========================================
 # TELA DE LOGIN / CADASTRO
 # ==========================================
-if not user_match.empty:
+if not st.session_state['logado']:
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        st.markdown("<h1 style='text-align: center; color: #1E90FF;'>👑 Royal Acesso</h1>", unsafe_allow_html=True)
+        tab_login, tab_cadastro = st.tabs(["🔑 Entrar", "📝 Solicitar Acesso"])
+        
+        with tab_login:
+            login_user = st.text_input("Usuario", key="login_u")
+            login_pass = st.text_input("Senha", type="password", key="login_p")
+            
+            if st.button("ENTRAR", use_container_width=True):
+                df_users = carregar_dados("usuarios")
+                
+                if df_users.empty:
+                    st.error("Nenhum usuario cadastrado. Crie o Admin na planilha primeiro ou cadastre-se.")
+                else:
+                    # Converte para string para evitar erros de comparação
+                    df_users['Usuario'] = df_users['Usuario'].astype(str)
+                    df_users['Senha'] = df_users['Senha'].astype(str)
+                    
+                    user_match = df_users[(df_users['Usuario'] == login_user) & (df_users['Senha'] == login_pass)]
+                    
+                    if not user_match.empty:
                         valor_aprovado = user_match.iloc[0]['Aprovado']
                         
-                        # --- 🕵️‍♀️ O DETETIVE DE TIPOS ---
-                        # Vamos ver o que está vindo da planilha para ter certeza
-                        # st.write(f"DEBUG: O valor na planilha é: {valor_aprovado} (Tipo: {type(valor_aprovado)})") 
-                        
-                        # Converte para texto maiúsculo para padronizar
+                        # --- A CHAVE MESTRA ---
+                        # Aceita TRUE, 1, VERDADEIRO, etc.
                         status_str = str(valor_aprovado).strip().upper()
                         
-                        # --- A CHAVE MESTRA ---
-                        # Aceita: "TRUE", "True", "true", Booleano True, Número 1, "VERDADEIRO"
                         if status_str in ['TRUE', '1', '1.0', 'VERDADEIRO', 'SIM']:
                             st.session_state['logado'] = True
                             st.session_state['usuario'] = login_user
                             st.session_state['nome'] = user_match.iloc[0]['Nome']
                             st.rerun()
                         else:
-                            st.warning(f"🔒 Seu cadastro ainda esta em analise. (Status lido: {valor_aprovado})")
+                            st.warning(f"🔒 Seu cadastro ainda esta em analise. (Status: {valor_aprovado})")
                     else:
                         st.error("Usuario ou senha incorretos.")
 
@@ -139,12 +155,16 @@ if not user_match.empty:
             new_nome = st.text_input("Nome Completo")
             new_user = st.text_input("Usuario desejado")
             new_pass = st.text_input("Senha desejada", type="password")
+            
             if st.button("SOLICITAR CADASTRO", use_container_width=True):
                 if new_nome and new_user and new_pass:
                     sucesso, msg = cadastrar_novo_usuario(new_user, new_pass, new_nome)
-                    if sucesso: st.success(msg)
-                    else: st.error(msg)
-                else: st.error("Preencha tudo!")
+                    if sucesso: 
+                        st.success(msg)
+                    else: 
+                        st.error(msg)
+                else: 
+                    st.error("Preencha tudo!")
 
 # ==========================================
 # ÁREA LOGADA
@@ -172,10 +192,8 @@ else:
         with tab_vendas:
             st.warning("Dados carregados da Planilha Google.")
             
-            # --- 💉 A CURA DO ERRO ESTÁ AQUI EMBAIXO ---
-            # Essa linha transforma qualquer 'NaN' (erro) em texto vazio "" na marra!
+            # Limpeza visual para o Editor não quebrar
             df_vendas = df_vendas.fillna("") 
-            # -------------------------------------------
 
             df_editado = st.data_editor(
                 df_vendas, 
@@ -195,6 +213,10 @@ else:
 
         with tab_users:
             df_users = carregar_dados("usuarios")
+            
+            # Limpeza visual para evitar erros
+            df_users = df_users.fillna("")
+            
             df_users_editado = st.data_editor(
                 df_users,
                 column_config={
@@ -247,7 +269,6 @@ else:
                     
                     salvar_indicacao(usuario_atual, nome, endereco, tel, plano_texto, obs)
                     st.success("Salvo no Google Sheets com sucesso!")
-                    import time
                     time.sleep(1)
                     st.cache_data.clear()
                     st.rerun()
