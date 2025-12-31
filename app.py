@@ -99,7 +99,7 @@ def salvar_indicacao(afiliado, cliente, endereco, telefone, plano_final, obs):
 def calcular_nivel(qtd_vendas_validas):
     if qtd_vendas_validas >= 40: return "💎 Diamante", 400, 100
     elif qtd_vendas_validas >= 20: return "🥇 Ouro", 200, 40
-    elif qtd_vendas_validas >= 10: return "🥈 Prata", 100, 20
+    elif qtd_vendas_validas >= 10: return "🥈 Prata", 150, 20
     elif qtd_vendas_validas >= 5: return "🥉 Bronze", 50, 10
     else: return "👶 Iniciante", 0, 5
 
@@ -214,8 +214,17 @@ else:
         with tab_users:
             df_users = carregar_dados("usuarios")
             
-            # Limpeza visual para evitar erros
+            # --- CORREÇÃO: Força ser True/False para o Checkbox funcionar ---
+            # Limpa NaN
             df_users = df_users.fillna("")
+            
+            # Função que transforma qualquer bagunça em True ou False
+            def limpar_booleano(valor):
+                return str(valor).strip().upper() in ['TRUE', '1', 'VERDADEIRO', 'SIM']
+            
+            if 'Aprovado' in df_users.columns:
+                df_users['Aprovado'] = df_users['Aprovado'].apply(limpar_booleano)
+            # -------------------------------------------------------------
             
             df_users_editado = st.data_editor(
                 df_users,
