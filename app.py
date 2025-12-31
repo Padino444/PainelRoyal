@@ -26,14 +26,23 @@ def get_connection():
 
 def carregar_dados(aba):
     conn = get_connection()
-    # ttl=0 garante que pega os dados frescos
+    # ttl=0 garante dados frescos
     df = conn.read(worksheet=aba, ttl=0)
     
-    # --- A MÁGICA DA LIMPEZA AQUI ---
-    # Se a aba for de usuarios, remove linhas onde o 'Usuario' está vazio
-    if aba == "usuarios" and not df.empty:
+    # --- FAXINA AUTOMÁTICA NOS CABEÇALHOS ---
+    # Isso remove espaços vazios antes ou depois do nome (ex: "Usuario " vira "Usuario")
+    df.columns = df.columns.str.strip()
+    
+    # --- LIMPEZA DE LINHAS VAZIAS ---
+    if aba == "usuarios":
+        # Se a planilha estiver vazia ou com cabeçalho errado, avisa a gente antes de quebrar
+        if "Usuario" not in df.columns:
+            st.error(f"⚠️ ATENÇÃO: Não achei a coluna 'Usuario'. As colunas que achei foram: {df.columns.tolist()}")
+            st.stop() # Para o código aqui pra você ler a mensagem acima
+            
+        # Agora sim, filtra (removendo linhas onde Usuario está vazio)
         df = df.dropna(subset=["Usuario"])
-        # Garante que não tem espaços vazios sujando
+        # Remove se for só espaço vazio
         df = df[df["Usuario"].astype(str).str.strip() != ""]
         
     return df
