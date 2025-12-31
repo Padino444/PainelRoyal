@@ -27,7 +27,7 @@ def get_connection():
 
 def carregar_dados(aba):
     conn = get_connection()
-    # ttl=0 é essencial para não pegar cache velho
+    # ttl=0 garante que pegamos dados frescos do Google
     df = conn.read(worksheet=aba, ttl=0)
     
     # 1. Limpa espaços nos nomes das colunas (cabeçalho)
@@ -36,20 +36,19 @@ def carregar_dados(aba):
     # 2. Tratamento para USUARIOS
     if aba == "usuarios":
         if "Usuario" in df.columns:
+            # Remove linhas totalmente vazias ou sujas
             df = df.dropna(subset=["Usuario"])
             df = df[df["Usuario"].astype(str).str.strip() != ""]
 
-    # 3. Tratamento para VENDAS (Evita erro de JSON/NaN)
+    # 3. Tratamento para VENDAS
     if aba == "vendas":
-        # Se tiver coluna Cliente, remove as linhas onde Cliente está vazio
         if "Cliente" in df.columns:
             df = df.dropna(subset=["Cliente"])
             df = df[df["Cliente"].astype(str).str.strip() != ""]
         
-        # O SEGREDO: Preenche buracos vazios (NaN) com texto vazio ("")
+        # Preenche vazios com texto em branco para não quebrar o painel
         df = df.fillna("")
-        
-        # SEGURANÇA EXTRA: Converte tudo para texto
+        # Garante que tudo seja texto na visualização
         df = df.astype(str)
             
     return df
@@ -59,22 +58,34 @@ def salvar_no_google(df, aba):
     conn.update(worksheet=aba, data=df)
 
 # --- FUNÇÕES DO SISTEMA ---
+
 def cadastrar_novo_usuario(usuario, senha, nome):
     df = carregar_dados("usuarios")
     
-    # Verifica se já existe
+    # Verifica duplicidade
     if not df.empty and str(usuario) in df['Usuario'].astype(str).values:
         return False, "Usuario ja existe."
     
+    # --- A CORREÇÃO MÁGICA (BLINDAGEM) ---
+    # Antes de adicionar o novo, vamos garantir que os ANTIGOS estejam certos.
+    # Essa função força tudo a virar True ou False (Booleano puro), sem texto misturado.
+    def normalizar_status(valor):
+        return str(valor).strip().upper() in ['TRUE', '1', '1.0', 'VERDADEIRO', 'SIM']
+
+    if 'Aprovado' in df.columns:
+        df['Aprovado'] = df['Aprovado'].apply(normalizar_status)
+    
+    # Cria o novo usuário já como False (Booleano)
     novo_dado = {
         "Usuario": str(usuario), 
         "Senha": str(senha), 
         "Nome": str(nome), 
-        # Envia como texto para o Google Sheets virar Checkbox desmarcado
-        "Aprovado": "FALSE" 
+        "Aprovado": False  # Checkbox desmarcado
     }
     
     novo_usuario = pd.DataFrame([novo_dado])
+    
+    # Junta o antigo (já corrigido) com o novo
     df_final = pd.concat([df, novo_usuario], ignore_index=True)
     
     salvar_no_google(df_final, "usuarios")
@@ -127,7 +138,6 @@ if not st.session_state['logado']:
                 if df_users.empty:
                     st.error("Nenhum usuario cadastrado. Crie o Admin na planilha primeiro ou cadastre-se.")
                 else:
-                    # Converte para string para evitar erros de comparação
                     df_users['Usuario'] = df_users['Usuario'].astype(str)
                     df_users['Senha'] = df_users['Senha'].astype(str)
                     
@@ -136,8 +146,7 @@ if not st.session_state['logado']:
                     if not user_match.empty:
                         valor_aprovado = user_match.iloc[0]['Aprovado']
                         
-                        # --- A CHAVE MESTRA ---
-                        # Aceita TRUE, 1, VERDADEIRO, etc.
+                        # Padroniza para verificar o login
                         status_str = str(valor_aprovado).strip().upper()
                         
                         if status_str in ['TRUE', '1', '1.0', 'VERDADEIRO', 'SIM']:
@@ -146,7 +155,7 @@ if not st.session_state['logado']:
                             st.session_state['nome'] = user_match.iloc[0]['Nome']
                             st.rerun()
                         else:
-                            st.warning(f"🔒 Seu cadastro ainda esta em analise. (Status: {valor_aprovado})")
+                            st.warning(f"🔒 Seu cadastro ainda esta em analise.")
                     else:
                         st.error("Usuario ou senha incorretos.")
 
@@ -191,8 +200,7 @@ else:
         
         with tab_vendas:
             st.warning("Dados carregados da Planilha Google.")
-            
-            # Limpeza visual para o Editor não quebrar
+            # Limpeza visual para evitar erro NaN
             df_vendas = df_vendas.fillna("") 
 
             df_editado = st.data_editor(
@@ -214,17 +222,15 @@ else:
         with tab_users:
             df_users = carregar_dados("usuarios")
             
-            # --- CORREÇÃO: Força ser True/False para o Checkbox funcionar ---
-            # Limpa NaN
+            # --- CORREÇÃO VISUAL ADMIN ---
             df_users = df_users.fillna("")
             
-            # Função que transforma qualquer bagunça em True ou False
+            # Garante que a coluna seja Booleana para o Editor funcionar
             def limpar_booleano(valor):
-                return str(valor).strip().upper() in ['TRUE', '1', 'VERDADEIRO', 'SIM']
+                return str(valor).strip().upper() in ['TRUE', '1', '1.0', 'VERDADEIRO', 'SIM']
             
             if 'Aprovado' in df_users.columns:
                 df_users['Aprovado'] = df_users['Aprovado'].apply(limpar_booleano)
-            # -------------------------------------------------------------
             
             df_users_editado = st.data_editor(
                 df_users,
