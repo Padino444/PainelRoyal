@@ -180,6 +180,12 @@ else:
         
         with tab_vendas:
             st.warning("Dados carregados da Planilha Google.")
+            
+            # --- 💉 A CURA DO ERRO ESTÁ AQUI EMBAIXO ---
+            # Essa linha transforma qualquer 'NaN' (erro) em texto vazio "" na marra!
+            df_vendas = df_vendas.fillna("") 
+            # -------------------------------------------
+
             df_editado = st.data_editor(
                 df_vendas, 
                 num_rows="dynamic",
@@ -190,6 +196,7 @@ else:
                 },
                 use_container_width=True
             )
+            
             if st.button("💾 Salvar Vendas na Nuvem"):
                 salvar_no_google(df_editado, "vendas")
                 st.success("Planilha atualizada!")
